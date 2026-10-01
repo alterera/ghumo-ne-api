@@ -10,7 +10,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Build on GitHub runner first — shows real TypeScript errors in the log
   verify-build:
     name: Verify build
     runs-on: ubuntu-latest
@@ -47,24 +46,21 @@ jobs:
           command_timeout: 15m
           script_stop: true
           script: |
-            # Use -eo (not -u) — nvm scripts use unset variables internally
             set -eo pipefail
 
             APP_DIR="${{ secrets.GHUMONE_APP_DIR || '/var/www/ghumone-api' }}"
             PM2_NAME="ghumone-api"
 
-            # Load NVM and use Node 24 (matches .nvmrc / local dev)
             export NVM_DIR="$HOME/.nvm"
             if [ -s "$NVM_DIR/nvm.sh" ]; then
               . "$NVM_DIR/nvm.sh"
-              nvm install 24
               nvm use 24
             fi
 
             echo "==> Deploying GhumoNE API in ${APP_DIR}"
-            echo "==> Node version: $(node -v)"
-            echo "==> NPM version: $(npm -v)"
-            echo "==> NODE_ENV before install: ${NODE_ENV:-unset}"
+            echo "==> Node: $(node -v) | NPM: $(npm -v)"
+            echo "==> NODE_ENV: ${NODE_ENV:-unset}"
+            echo "==> npm production config: $(npm config get production)"
 
             cd "${APP_DIR}"
 
@@ -73,19 +69,29 @@ jobs:
               exit 1
             fi
 
+            if [ ! -f .env ]; then
+              echo "ERROR: .env file missing at ${APP_DIR}/.env"
+              exit 1
+            fi
+
             git fetch origin main
             git reset --hard origin/main
 
-            # Ensure devDependencies (@nestjs/cli, typescript) are installed
+            # Override global VPS npm production=true (project .npmrc also sets this)
             unset NODE_ENV
-            export NPM_CONFIG_PRODUCTION=false
-            npm ci --include=dev
+            npm config delete production 2>/dev/null || true
 
-            npx prisma migrate deploy
+            # Skip postinstall during ci — run prisma generate explicitly with full logs
+            npm ci --include=dev --ignore-scripts
 
-            # Build with extra memory headroom for small VPS
+            echo "==> Generating Prisma client..."
+            npx prisma generate 2>&1 | tee /tmp/ghumone-prisma.log
+
+            echo "==> Running migrations..."
+            npx prisma migrate deploy 2>&1 | tee /tmp/ghumone-migrate.log
+
+            echo "==> Building..."
             export NODE_OPTIONS="--max-old-space-size=2048"
-            echo "==> Running build..."
             npm run build 2>&1 | tee /tmp/ghumone-build.log
 
             if pm2 describe "${PM2_NAME}" > /dev/null 2>&1; then

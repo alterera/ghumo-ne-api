@@ -233,6 +233,9 @@ Update `nginx/ghumone-api.conf.example` if you use a different port.
 | `nest build` fails in GitHub Action with no error | Check the **verify-build** job log first; ensure `.nvmrc` exists; ensure `npm ci --include=dev` runs on VPS |
 | `nest build` fails on VPS only | Run `cat /tmp/ghumone-build.log` on VPS; check `free -h` for OOM; ensure Node 24 via `nvm use 24` |
 | `nvm use` fails | Run `nvm install 24 && nvm use 24` on VPS; `.nvmrc` must be committed to repo |
+| `npm warn config production` during deploy | VPS has global `npm config set production true` — fixed by project `.npmrc` + `npm ci --include=dev --ignore-scripts` |
+| Fails at `prisma generate` in postinstall | Deploy uses `--ignore-scripts` then runs `prisma generate` explicitly; check `/tmp/ghumone-prisma.log` on VPS |
+| `.env file missing` | Create `/var/www/ghumone-api/.env` on VPS before first deploy |
 
 ```bash
 pm2 logs ghumone-api
