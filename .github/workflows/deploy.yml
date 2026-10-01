@@ -29,7 +29,7 @@ jobs:
             # Load NVM for SSH sessions
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            nvm use 22
+            nvm use  # Use Node version from .nvmrc (24)
 
             APP_DIR="${{ secrets.GHUMONE_APP_DIR || '/var/www/ghumone-api' }}"
             PM2_NAME="ghumone-api"
