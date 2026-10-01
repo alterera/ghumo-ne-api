@@ -1,4 +1,4 @@
-name: Deploy to VPS
+name: Deploy to AltServer
 
 on:
   push:
@@ -26,10 +26,17 @@ jobs:
           script: |
             set -euo pipefail
 
+            # Load NVM for SSH sessions
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            nvm use 22
+
             APP_DIR="${{ secrets.GHUMONE_APP_DIR || '/var/www/ghumone-api' }}"
             PM2_NAME="ghumone-api"
 
             echo "==> Deploying GhumoNE API in ${APP_DIR}"
+            echo "==> Node version: $(node -v)"
+            echo "==> NPM version: $(npm -v)"
 
             cd "${APP_DIR}"
 
