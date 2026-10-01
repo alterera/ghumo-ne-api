@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum TripStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum BannerType {
+  HERO
+  OFFER
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum InquiryStatus {
+  NEW
+  READ
+  RESPONDED
+}
+
+model Admin {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         AdminRole @default(ADMIN)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model SiteSetting {
+  id           String   @id @default(cuid())
+  phone        String
+  phone2       String?
+  email        String
+  instagramUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model NavItem {
+  id        String    @id @default(cuid())
+  label     String
+  href      String
+  parentId  String?
+  parent    NavItem?  @relation("NavChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children  NavItem[] @relation("NavChildren")
+  order     Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([parentId])
+  @@index([order])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  imageUrl    String
+  description String?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  trips       Trip[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+}
+
+model Trip {
+  id          String     @id @default(cuid())
+  title       String
+  slug        String     @unique
+  location    String
+  duration    String
+  startDate   DateTime
+  endDate     DateTime
+  maxPeople   Int
+  price       Decimal    @db.Decimal(10, 2)
+  currency    String     @default("INR")
+  images      String[]
+  description String     @db.Text
+  categoryId  String
+  category    Category   @relation(fields: [categoryId], references: [id])
+  isFeatured  Boolean    @default(false)
+  status      TripStatus @default(DRAFT)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([categoryId])
+  @@index([isFeatured])
+  @@index([status])
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  imageUrl    String
+  description String?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+}
+
+model Banner {
+  id        String     @id @default(cuid())
+  type      BannerType
+  imageUrl  String
+  linkUrl   String
+  title     String?
+  order     Int        @default(0)
+  isActive  Boolean    @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([type, order])
+}
+
+model Feature {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  iconName    String
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+}
+
+model Faq {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String   @db.Text
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
+
+model InstagramReel {
+  id           String   @id @default(cuid())
+  reelUrl      String
+  thumbnailUrl String?
+  order        Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([order])
+}
+
+model Blog {
+  id          String     @id @default(cuid())
+  title       String
+  slug        String     @unique
+  excerpt     String
+  content     String     @db.Text
+  imageUrl    String
+  status      BlogStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([status])
+  @@index([publishedAt])
+}
+
+model Inquiry {
+  id        String        @id @default(cuid())
+  name      String
+  phone     String
+  message   String        @db.Text
+  status    InquiryStatus @default(NEW)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
