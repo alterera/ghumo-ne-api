@@ -77,12 +77,12 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # Override global VPS npm production=true (project .npmrc also sets this)
+            # Override global VPS npm production=true
             unset NODE_ENV
             npm config delete production 2>/dev/null || true
 
-            # Skip postinstall during ci — run prisma generate explicitly with full logs
-            npm ci --include=dev --ignore-scripts
+            echo "==> Installing dependencies..."
+            npm ci --include=dev --ignore-scripts 2>&1 | tee /tmp/ghumone-npm-ci.log
 
             echo "==> Generating Prisma client..."
             npx prisma generate 2>&1 | tee /tmp/ghumone-prisma.log
