@@ -10,8 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-build:
-    name: Verify build
+  build:
+    name: Build on GitHub
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,13 +30,38 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Pack dist for deploy
+        run: tar -czf dist.tar.gz -C dist .
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: dist.tar.gz
+          retention-days: 1
+
   deploy:
     name: Deploy to VPS
-    needs: verify-build
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy over SSH
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-dist
+
+      - name: Upload dist tarball to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: dist.tar.gz
+          target: /tmp
+
+      - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -59,15 +84,8 @@ jobs:
 
             echo "==> Deploying GhumoNE API in ${APP_DIR}"
             echo "==> Node: $(node -v) | NPM: $(npm -v)"
-            echo "==> NODE_ENV: ${NODE_ENV:-unset}"
-            echo "==> npm production config: $(npm config get production)"
 
             cd "${APP_DIR}"
-
-            if [ ! -d .git ]; then
-              echo "Repository not cloned yet. Clone it first (see DEPLOY.md)."
-              exit 1
-            fi
 
             if [ ! -f .env ]; then
               echo "ERROR: .env file missing at ${APP_DIR}/.env"
@@ -77,12 +95,11 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # Override global VPS npm production=true
             unset NODE_ENV
             npm config delete production 2>/dev/null || true
 
-            echo "==> Installing dependencies..."
-            npm ci --include=dev --ignore-scripts 2>&1 | tee /tmp/ghumone-npm-ci.log
+            echo "==> Installing production dependencies..."
+            npm ci --omit=dev 2>&1 | tee /tmp/ghumone-npm-ci.log
 
             echo "==> Generating Prisma client..."
             npx prisma generate 2>&1 | tee /tmp/ghumone-prisma.log
@@ -90,9 +107,17 @@ jobs:
             echo "==> Running migrations..."
             npx prisma migrate deploy 2>&1 | tee /tmp/ghumone-migrate.log
 
-            echo "==> Building..."
-            export NODE_OPTIONS="--max-old-space-size=2048"
-            npm run build 2>&1 | tee /tmp/ghumone-build.log
+            echo "==> Extracting pre-built dist from GitHub Actions..."
+            rm -rf dist
+            mkdir -p dist
+            tar -xzf /tmp/dist.tar.gz -C dist
+            rm -f /tmp/dist.tar.gz
+
+            if [ ! -f dist/main.js ]; then
+              echo "ERROR: dist/main.js not found after extract"
+              ls -la dist/
+              exit 1
+            fi
 
             if pm2 describe "${PM2_NAME}" > /dev/null 2>&1; then
               pm2 restart "${PM2_NAME}" --update-env
@@ -102,4 +127,4 @@ jobs:
             fi
 
             pm2 status "${PM2_NAME}"
-            echo "==> Deploy complete"
+            echo "==> Deploy complete (build ran on GitHub, not VPS)"
