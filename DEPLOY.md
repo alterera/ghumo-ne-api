@@ -169,7 +169,7 @@ Triggers on every push to `main`:
 
 **Job 1 — build (GitHub runner):** `npm ci` → `prisma generate` → `npm run build` → upload `dist.tar.gz`
 
-**Job 2 — deploy (VPS):** SCP `dist.tar.gz` → `git pull` → `npm ci --omit=dev` → `prisma generate` → `prisma migrate deploy` → extract `dist/` → `pm2 restart`
+**Job 2 — deploy (VPS):** SCP `dist.tar.gz` → `git pull` → clean `npm ci` → `prisma generate` → `prisma migrate deploy` → extract `dist/` → `pm2 restart`
 
 > Build runs on GitHub (more RAM). VPS only installs production deps and runs pre-built code — avoids OOM during `nest build` on small VPS.
 
@@ -239,6 +239,8 @@ Update `nginx/ghumone-api.conf.example` if you use a different port.
 | `invalid config omit=""` in `.npmrc` | Remove `.npmrc` from repo — use `npm ci --include=dev` in deploy script instead |
 | Fails at `prisma generate` in postinstall | Deploy uses `--ignore-scripts` then runs `prisma generate` explicitly; check `/tmp/ghumone-prisma.log` on VPS |
 | `.env file missing` | Create `/var/www/ghumone-api/.env` on VPS before first deploy |
+| `Cannot find package @nestjs/common/index.js` | Run `rm -rf node_modules && npm ci` on VPS — deploy now does clean install each time |
+| PM2 shows old process name `ghumo-ne` | Run `pm2 delete ghumo-ne` and use `ghumone-api` from ecosystem.config.cjs |
 
 ```bash
 pm2 logs ghumone-api

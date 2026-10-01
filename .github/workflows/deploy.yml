@@ -98,8 +98,16 @@ jobs:
             unset NODE_ENV
             npm config delete production 2>/dev/null || true
 
-            echo "==> Installing production dependencies..."
-            npm ci --omit=dev 2>&1 | tee /tmp/ghumone-npm-ci.log
+            echo "==> Clean install (full deps, no build on VPS)..."
+            rm -rf node_modules
+            npm ci --ignore-scripts 2>&1 | tee /tmp/ghumone-npm-ci.log
+
+            echo "==> Verifying dependencies..."
+            test -f node_modules/@nestjs/common/index.js || {
+              echo "ERROR: @nestjs/common not installed correctly"
+              ls -la node_modules/@nestjs/common/ || true
+              exit 1
+            }
 
             echo "==> Generating Prisma client..."
             npx prisma generate 2>&1 | tee /tmp/ghumone-prisma.log
