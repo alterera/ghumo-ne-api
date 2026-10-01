@@ -10,8 +10,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Build on GitHub runner first — shows real TypeScript errors in the log
+  verify-build:
+    name: Verify build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build
+        run: npm run build
+
   deploy:
     name: Deploy to VPS
+    needs: verify-build
     runs-on: ubuntu-latest
 
     steps:
@@ -22,21 +44,27 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 15m
           script_stop: true
           script: |
-            set -euo pipefail
-
-            # Load NVM for SSH sessions
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            nvm use  # Use Node version from .nvmrc (24)
+            # Use -eo (not -u) — nvm scripts use unset variables internally
+            set -eo pipefail
 
             APP_DIR="${{ secrets.GHUMONE_APP_DIR || '/var/www/ghumone-api' }}"
             PM2_NAME="ghumone-api"
 
+            # Load NVM and use Node 24 (matches .nvmrc / local dev)
+            export NVM_DIR="$HOME/.nvm"
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              . "$NVM_DIR/nvm.sh"
+              nvm install 24
+              nvm use 24
+            fi
+
             echo "==> Deploying GhumoNE API in ${APP_DIR}"
             echo "==> Node version: $(node -v)"
             echo "==> NPM version: $(npm -v)"
+            echo "==> NODE_ENV before install: ${NODE_ENV:-unset}"
 
             cd "${APP_DIR}"
 
@@ -48,9 +76,17 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            npm ci
+            # Ensure devDependencies (@nestjs/cli, typescript) are installed
+            unset NODE_ENV
+            export NPM_CONFIG_PRODUCTION=false
+            npm ci --include=dev
+
             npx prisma migrate deploy
-            npm run build
+
+            # Build with extra memory headroom for small VPS
+            export NODE_OPTIONS="--max-old-space-size=2048"
+            echo "==> Running build..."
+            npm run build 2>&1 | tee /tmp/ghumone-build.log
 
             if pm2 describe "${PM2_NAME}" > /dev/null 2>&1; then
               pm2 restart "${PM2_NAME}" --update-env

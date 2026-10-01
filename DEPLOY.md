@@ -163,13 +163,13 @@ No secrets needed on your Windows machine for deploy — only GitHub Actions use
 
 Workflow file: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
 
+Node version is pinned in [`.nvmrc`](.nvmrc) (currently **24**).
+
 Triggers on every push to `main`:
-1. SSH into VPS
-2. `git pull` (hard reset to `origin/main`)
-3. `npm ci`
-4. `npx prisma migrate deploy`
-5. `npm run build`
-6. `pm2 restart ghumone-api`
+
+**Job 1 — verify-build (GitHub runner):** `npm ci` → `prisma generate` → `npm run build`
+
+**Job 2 — deploy (VPS over SSH):** `nvm use 24` → `git pull` → `npm ci --include=dev` → `prisma migrate deploy` → `npm run build` → `pm2 restart`
 
 ---
 
@@ -230,6 +230,9 @@ Update `nginx/ghumone-api.conf.example` if you use a different port.
 | CORS errors from Vercel | Add Vercel URL to `CORS_ORIGIN` (comma-separated) |
 | Upload images show localhost URL | Set `PUBLIC_API_URL=https://api.ghumone.com` on VPS |
 | Migration failed | SSH to VPS, run `npx prisma migrate deploy` manually and check logs |
+| `nest build` fails in GitHub Action with no error | Check the **verify-build** job log first; ensure `.nvmrc` exists; ensure `npm ci --include=dev` runs on VPS |
+| `nest build` fails on VPS only | Run `cat /tmp/ghumone-build.log` on VPS; check `free -h` for OOM; ensure Node 24 via `nvm use 24` |
+| `nvm use` fails | Run `nvm install 24 && nvm use 24` on VPS; `.nvmrc` must be committed to repo |
 
 ```bash
 pm2 logs ghumone-api
